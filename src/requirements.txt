@@ -1,0 +1,14 @@
+# Core dependencies
+functions-framework==3.*
+flask==2.*
+gunicorn==21.*
+
+# Google Cloud
+google-cloud-secret-manager==2.*
+
+# Notion API
+notion-client==2.*
+
+# Utilities
+python-dateutil==2.*
+requests==2.*

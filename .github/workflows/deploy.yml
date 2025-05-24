@@ -1,0 +1,76 @@
+name: Deploy Payment Tracker
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: us-central1
+  FUNCTION_NAME: payment-extractor
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+    - name: Deploy to Cloud Functions
+      run: |
+        gcloud functions deploy $FUNCTION_NAME \
+          --runtime python39 \
+          --trigger-http \
+          --allow-unauthenticated \
+          --region $GCP_REGION \
+          --source . \
+          --entry-point payment_extractor \
+          --memory 512MB \
+          --timeout 540s \
+          --set-env-vars GCP_PROJECT_ID=$GCP_PROJECT_ID \
+          --set-secrets "GMAIL_APP_PASSWORD=gmail-app-password:latest,NOTION_TOKEN=notion-api-token:latest,NOTION_DATABASE_ID=notion-database-id:latest"
+
+    - name: Update Cloud Scheduler
+      run: |
+        gcloud scheduler jobs delete payment-tracker-monthly \
+          --location=$GCP_REGION \
+          --quiet || true
+        
+        gcloud scheduler jobs create http payment-tracker-monthly \
+          --location $GCP_REGION \
+          --schedule "0 9 1,15 * *" \
+          --uri "https://$GCP_REGION-$GCP_PROJECT_ID.cloudfunctions.net/$FUNCTION_NAME" \
+          --http-method POST \
+          --headers "Content-Type=application/json" \
+          --message-body '{"source": "scheduler"}' \
+          --description "Payment tracker - twice monthly" \
+          --time-zone "America/New_York"
+
+    - name: Test deployment
+      run: |
+        FUNCTION_URL="https://$GCP_REGION-$GCP_PROJECT_ID.cloudfunctions.net/$FUNCTION_NAME"
+        echo "Testing deployment"
+        
+        RESPONSE=$(curl -s -X POST "$FUNCTION_URL" \
+          -H "Content-Type: application/json" \
+          -d '{"test": true}' || echo "Connection failed")
+        
+        echo "Response: $RESPONSE"
+
+    - name: Deployment Summary
+      run: |
+        echo "Deployment completed"
+        echo "Function: https://$GCP_REGION-$GCP_PROJECT_ID.cloudfunctions.net/$FUNCTION_NAME"
+        echo "Schedule: 1st and 15th at 9 AM EST"
