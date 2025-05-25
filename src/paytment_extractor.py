@@ -26,7 +26,8 @@ class PaymentExtractor:
             'wise': 'noreply@wise.com',
             'paypal': 'service@paypal.com', 
             'remitly': 'no-reply@remitly.com',
-            'billcom': 'hq.bill.com'
+            'billcom': 'bill.com',
+            'billcom_account': 'account-services@hq.bill.com'
         }
         
         logger.info(f"PaymentExtractor initialized for {gmail_username}, looking back {days_back} days")
