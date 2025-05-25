@@ -5,7 +5,8 @@ import functions_framework
 import os
 import json
 from src.logger import get_logger
-from src.payment_extractor import PaymentExtractor
+from src.paytment_extractor import PaymentExtractor
+from src.logger import get_logger
 from src.notion_client import NotionClient
 
 logger = get_logger(__name__)
