@@ -1,15 +1,15 @@
 """
-Notion client with database management and schema validation.
+Notion client with database management, schema validation, and duplicate detection.
 """
 from notion_client import Client
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 import time
 from src.logger import get_logger
 
 logger = get_logger(__name__)
 
 class NotionClient:
-    """Notion client with automatic database setup and management."""
+    """Notion client with automatic database setup, management, and duplicate detection."""
     
     def __init__(self, token: str, database_id: Optional[str] = None):
         self.client = Client(auth=token)
@@ -19,8 +19,12 @@ class NotionClient:
         logger.info("NotionClient initialized")
     
     def _get_required_schema(self) -> Dict[str, Dict]:
-        """Define the required database schema for payment tracking."""
+        """Define the required database schema for payment tracking with duplicate detection."""
         return {
+            "Sender": {
+                "type": "title",
+                "title": {}
+            },
             "Service": {
                 "type": "select",
                 "select": {
@@ -31,10 +35,6 @@ class NotionClient:
                         {"name": "Billcom", "color": "purple"}
                     ]
                 }
-            },
-            "Sender": {
-                "type": "title",
-                "title": {}
             },
             "Amount": {
                 "type": "number",
@@ -62,6 +62,22 @@ class NotionClient:
             },
             "Days Ago": {
                 "type": "rich_text", 
+                "rich_text": {}
+            },
+            "Message ID": {
+                "type": "rich_text",
+                "rich_text": {}
+            },
+            "From Email": {
+                "type": "rich_text",
+                "rich_text": {}
+            },
+            "To Email": {
+                "type": "rich_text",
+                "rich_text": {}
+            },
+            "Extraction Timestamp": {
+                "type": "rich_text",
                 "rich_text": {}
             },
             "Created": {
@@ -163,18 +179,81 @@ class NotionClient:
             logger.error(f"Failed to create database: {str(e)}")
             raise
     
+    def _get_existing_message_ids(self) -> Set[str]:
+        """Efficiently retrieve all existing message IDs from the database."""
+        try:
+            logger.info("Fetching existing message IDs for duplicate detection")
+            
+            existing_ids = set()
+            has_more = True
+            next_cursor = None
+            
+            while has_more:
+                # Query database with pagination
+                query_params = {
+                    "database_id": self.database_id,
+                    "page_size": 100,  # Maximum page size
+                    "filter": {
+                        "property": "Message ID",
+                        "rich_text": {
+                            "is_not_empty": True
+                        }
+                    }
+                }
+                
+                if next_cursor:
+                    query_params["start_cursor"] = next_cursor
+                
+                response = self.client.databases.query(**query_params)
+                
+                # Extract message IDs from results
+                for page in response.get("results", []):
+                    message_id_prop = page.get("properties", {}).get("Message ID", {})
+                    rich_text = message_id_prop.get("rich_text", [])
+                    if rich_text and len(rich_text) > 0:
+                        message_id = rich_text[0].get("text", {}).get("content", "")
+                        if message_id:
+                            existing_ids.add(message_id)
+                
+                # Check for more pages
+                has_more = response.get("has_more", False)
+                next_cursor = response.get("next_cursor")
+            
+            logger.info(f"Retrieved {len(existing_ids)} existing message IDs")
+            return existing_ids
+            
+        except Exception as e:
+            logger.error(f"Error fetching existing message IDs: {str(e)}")
+            return set()  # Return empty set on error to allow processing
+    
     def create_payment_records(self, payments: List[Dict]) -> Dict[str, Any]:
-        """Create payment records in the Notion database."""
-        logger.info(f"Creating {len(payments)} payment records")
+        """Create payment records in the Notion database with duplicate detection."""
+        logger.info(f"Creating payment records with duplicate detection for {len(payments)} payments")
+        
+        # Get all existing message IDs in one efficient query
+        existing_message_ids = self._get_existing_message_ids()
         
         created_count = 0
+        skipped_count = 0
         failed_count = 0
         errors = []
         
         for payment in payments:
             try:
+                message_id = payment.get('message_id', '')
+                
+                # Check for duplicate
+                if message_id in existing_message_ids:
+                    skipped_count += 1
+                    logger.info(f"Skipping duplicate payment with message_id: {message_id}")
+                    continue
+                
+                # Create new record
                 self._create_single_payment_record(payment)
                 created_count += 1
+                
+                # Add to existing set to prevent duplicates within the same batch
+                existing_message_ids.add(message_id)
                 
                 # Add small delay to respect rate limits
                 time.sleep(0.1)
@@ -187,24 +266,29 @@ class NotionClient:
         
         result = {
             "created": created_count,
+            "skipped_duplicates": skipped_count,
             "failed": failed_count,
             "errors": errors
         }
         
-        logger.info(f"Payment record creation completed: {created_count} created, {failed_count} failed")
+        logger.info(f"Payment record creation completed: {created_count} created, {skipped_count} duplicates skipped, {failed_count} failed")
         return result
     
     def _create_single_payment_record(self, payment: Dict) -> None:
-        """Create a single payment record in Notion."""
+        """Create a single payment record in Notion with all available fields."""
         try:
             # Convert payment data to Notion properties format
             properties = {
-                "Service": {"select": {"name": payment.get("service", "Unknown")}},
                 "Sender": {"title": [{"text": {"content": payment.get("sender", "Unknown")}}]},
+                "Service": {"select": {"name": payment.get("service", "Unknown")}},
                 "Amount": {"number": float(payment.get("amount", 0))},
                 "Currency": {"select": {"name": payment.get("currency", "USD")}},
                 "Subject": {"rich_text": [{"text": {"content": payment.get("subject", "")}}]},
-                "Days Ago": {"rich_text": [{"text": {"content": payment.get("days_ago", "Unknown")}}]}
+                "Days Ago": {"rich_text": [{"text": {"content": payment.get("days_ago", "Unknown")}}]},
+                "Message ID": {"rich_text": [{"text": {"content": payment.get("message_id", "")}}]},
+                "From Email": {"rich_text": [{"text": {"content": payment.get("from_email", "")}}]},
+                "To Email": {"rich_text": [{"text": {"content": payment.get("to_email", "")}}]},
+                "Extraction Timestamp": {"rich_text": [{"text": {"content": payment.get("extraction_timestamp", "")}}]}
             }
             
             # Add date if available
@@ -222,7 +306,7 @@ class NotionClient:
                 properties=properties
             )
             
-            logger.debug(f"Created record for {payment.get('sender')} - {payment.get('amount')} {payment.get('currency')}")
+            logger.debug(f"Created record for {payment.get('sender')} - {payment.get('amount')} {payment.get('currency')} (ID: {payment.get('message_id')})")
             
         except Exception as e:
             logger.error(f"Failed to create single record: {str(e)}")
