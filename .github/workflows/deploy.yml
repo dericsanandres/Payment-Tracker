@@ -6,6 +6,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_REGION: us-central1
@@ -21,11 +25,10 @@ jobs:
       version: ${{ steps.release.outputs.version }}
     steps:
       - name: Create Release
-        uses: google-github-actions/release-please-action@v4
+        uses: googleapis/release-please-action@v4
         id: release
         with:
           release-type: python
-          package-name: payment-tracker
 
   # Step 2: Deploy only when a release is created
   deploy:
