@@ -17,7 +17,7 @@ CONFIG = {
     'gmail_password': os.getenv('GMAIL_APP_PASSWORD'),
     'notion_token': os.getenv('NOTION_TOKEN'),
     'notion_db_id': os.getenv('NOTION_DATABASE_ID'),
-    'days_to_fetch': 15
+    'days_to_fetch': 600
 }
 
 @functions_framework.http
