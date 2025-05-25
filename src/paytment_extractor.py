@@ -26,8 +26,7 @@ class PaymentExtractor:
             'wise': 'noreply@wise.com',
             'paypal': 'service@paypal.com', 
             'remitly': 'no-reply@remitly.com',
-            'billcom': 'bill.com',
-            'billcom_account': 'account-services@hq.bill.com'
+            'billcom': 'account-services@hq.bill.com'
         }
         
         logger.info(f"PaymentExtractor initialized for {gmail_username}, looking back {days_back} days")
@@ -207,6 +206,7 @@ class PaymentExtractor:
     def _extract_amount(self, text: str) -> Tuple[Optional[str], Optional[str]]:
         """Extract amount and currency from text with detailed logging."""
         patterns = [
+            r'PHP\s*([0-9,]+\.?[0-9]*)',  # PHP currency format
             r'[\$₱€£¥]([0-9,]+\.?[0-9]*)',  # Symbol first
             r'([0-9,]+\.?[0-9]*)\s*(USD|PHP|EUR|GBP|CAD)',  # Amount then currency code
             r'(USD|PHP|EUR|GBP|CAD)\s*([0-9,]+\.?[0-9]*)',  # Currency code then amount
@@ -220,6 +220,12 @@ class PaymentExtractor:
             if match:
                 groups = match.groups()
                 logger.info(f"Pattern {i+1} matched! Groups: {groups}")
+                
+                if i == 0:  # PHP pattern
+                    amount = groups[0].replace(',', '')
+                    currency = 'PHP'
+                    logger.info(f"Amount extracted: {amount} {currency}")
+                    return amount, currency
                 
                 for group in groups:
                     if re.match(r'^[0-9,]+\.?[0-9]*$', group):
@@ -282,10 +288,11 @@ class PaymentExtractor:
             return str(header)
     
     def _get_email_body(self, email_message) -> str:
-        """Extract text body from email message."""
+        """Extract text body from email message, including HTML content."""
         body = ""
         try:
             if email_message.is_multipart():
+                # Try to get plain text first
                 for part in email_message.walk():
                     if part.get_content_type() == "text/plain":
                         try:
@@ -293,15 +300,55 @@ class PaymentExtractor:
                             break
                         except Exception:
                             continue
+                
+                # If no plain text, get HTML and strip tags
+                if not body:
+                    for part in email_message.walk():
+                        if part.get_content_type() == "text/html":
+                            try:
+                                html_content = part.get_payload(decode=True).decode('utf-8', errors='ignore')
+                                body = self._strip_html_tags(html_content)
+                                break
+                            except Exception:
+                                continue
             else:
                 try:
-                    body = email_message.get_payload(decode=True).decode('utf-8', errors='ignore')
+                    payload = email_message.get_payload(decode=True)
+                    if payload:
+                        content = payload.decode('utf-8', errors='ignore')
+                        # Check if it's HTML
+                        if '<html' in content.lower() or '<div' in content.lower():
+                            body = self._strip_html_tags(content)
+                        else:
+                            body = content
+                    else:
+                        body = str(email_message.get_payload())
                 except Exception:
                     body = str(email_message.get_payload())
         except Exception as e:
             logger.debug(f"Email body extraction error: {str(e)}")
         
         return body
+    
+    def _strip_html_tags(self, html_content: str) -> str:
+        """Strip HTML tags and decode entities to get plain text."""
+        import html
+        
+        # Remove script and style elements
+        html_content = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+        html_content = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Remove HTML tags
+        html_content = re.sub(r'<[^>]+>', ' ', html_content)
+        
+        # Decode HTML entities
+        html_content = html.unescape(html_content)
+        
+        # Clean up whitespace
+        html_content = re.sub(r'\s+', ' ', html_content)
+        html_content = html_content.strip()
+        
+        return html_content
     
     def _calculate_days_ago(self, date_str: str) -> str:
         """Calculate human-readable time difference."""
