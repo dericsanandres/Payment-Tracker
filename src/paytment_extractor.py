@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 class PaymentExtractor:
     """Extract payments from Gmail using IMAP with detailed logging."""
     
-    def __init__(self, gmail_username: str, gmail_password: str, days_back: int = 15):
+    def __init__(self, gmail_username: str, gmail_password: str, days_back: int = 600):
         self.gmail_username = gmail_username
         self.gmail_password = gmail_password
         self.days_back = days_back
