@@ -1,8 +1,9 @@
-name: Deploy Payment Tracker
+# .github/workflows/release-and-deploy.yml
+name: Release and Deploy Payment Tracker
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 env:
@@ -11,7 +12,25 @@ env:
   FUNCTION_NAME: payment-extractor
 
 jobs:
+  # Step 1: Create release with versioning and changelog
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Create Release
+        uses: google-github-actions/release-please-action@v4
+        id: release
+        with:
+          release-type: python
+          package-name: payment-tracker
+
+  # Step 2: Deploy only when a release is created
   deploy:
+    needs: release
+    if: ${{ needs.release.outputs.release_created }}
     runs-on: ubuntu-latest
     
     steps:
@@ -39,7 +58,7 @@ jobs:
           --entry-point payment_extractor \
           --memory 512MB \
           --timeout 540s \
-          --set-env-vars GCP_PROJECT_ID=$GCP_PROJECT_ID \
+          --set-env-vars GCP_PROJECT_ID=$GCP_PROJECT_ID,VERSION=${{ needs.release.outputs.version }} \
           --set-secrets "GMAIL_APP_PASSWORD=gmail-app-password:latest,NOTION_TOKEN=notion-api-token:latest,NOTION_DATABASE_ID=notion-database-id:latest"
 
     - name: Update Cloud Scheduler
@@ -55,13 +74,13 @@ jobs:
           --http-method POST \
           --headers "Content-Type=application/json" \
           --message-body '{"source": "scheduler"}' \
-          --description "Payment tracker - twice monthly" \
+          --description "Payment tracker - twice monthly (v${{ needs.release.outputs.version }})" \
           --time-zone "America/New_York"
 
     - name: Test deployment
       run: |
         FUNCTION_URL="https://$GCP_REGION-$GCP_PROJECT_ID.cloudfunctions.net/$FUNCTION_NAME"
-        echo "Testing deployment"
+        echo "Testing deployment for version ${{ needs.release.outputs.version }}"
         
         RESPONSE=$(curl -s -X POST "$FUNCTION_URL" \
           -H "Content-Type: application/json" \
@@ -71,6 +90,7 @@ jobs:
 
     - name: Deployment Summary
       run: |
-        echo "Deployment completed"
-        echo "Function: https://$GCP_REGION-$GCP_PROJECT_ID.cloudfunctions.net/$FUNCTION_NAME"
-        echo "Schedule: 1st and 15th at 9 AM EST"
+        echo "🚀 Deployment completed for version ${{ needs.release.outputs.version }}"
+        echo "📦 Function: https://$GCP_REGION-$GCP_PROJECT_ID.cloudfunctions.net/$FUNCTION_NAME"
+        echo "⏰ Schedule: 1st and 15th at 9 AM EST"
+        echo "🏷️ Release: https://github.com/${{ github.repository }}/releases/tag/${{ needs.release.outputs.tag_name }}"
