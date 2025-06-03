@@ -2,6 +2,8 @@
 
 Automated payment extraction from Gmail to Notion database using Google Cloud Functions.
 
+![payment_tracker](https://github.com/user-attachments/assets/3419df62-ee98-459f-a642-da63ffe0d527)
+
 ## Overview
 
 This tool monitors your Gmail inbox for payment notifications from various services (Wise, PayPal, Remitly, Bill.com) and automatically creates organized records in a Notion database.
