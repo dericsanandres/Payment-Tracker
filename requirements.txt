@@ -6,8 +6,10 @@ gunicorn==21.*
 # Google Cloud
 google-cloud-secret-manager==2.*
 
-# Notion API
-notion-client==2.*
+# Google Sheets API
+gspread==5.*
+google-auth==2.*
+google-auth-oauthlib==1.*
 
 # Utilities
 python-dateutil==2.*

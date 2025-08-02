@@ -1,18 +1,19 @@
 # Payment Tracker
 
-Automated payment extraction from Gmail to Notion database using Google Cloud Functions.
+Automated payment extraction from Gmail to Google Sheets using Google Cloud Functions.
 
 ![payment_tracker](https://github.com/user-attachments/assets/3419df62-ee98-459f-a642-da63ffe0d527)
 
 ## Overview
 
-This tool monitors your Gmail inbox for payment notifications from various services (Wise, PayPal, Remitly, Bill.com) and automatically creates organized records in a Notion database.
+This tool monitors your Gmail inbox for payment notifications from various services (Wise, PayPal, Remitly, Bill.com) and automatically creates organized records in a Google Sheets spreadsheet with comprehensive analytics.
 
 ## Features
 
 - **Automated Email Processing**: Scans Gmail for payment emails from configured services
 - **Duplicate Detection**: Prevents duplicate entries using message IDs
-- **Notion Integration**: Auto-creates structured payment records
+- **Google Sheets Integration**: Auto-creates structured payment records with metrics
+- **Real-time Analytics**: Automatic metrics calculations with Excel formulas
 - **Cloud Deployment**: Runs as Google Cloud Function with configurable scheduling
 
 ## Quick Start
@@ -20,7 +21,7 @@ This tool monitors your Gmail inbox for payment notifications from various servi
 ### Prerequisites
 
 - Gmail account with app password enabled
-- Notion workspace with API token
+- Google Sheets spreadsheet with service account access
 - Google Cloud account for deployment
 
 ### Environment Variables
@@ -29,8 +30,8 @@ Required environment variables:
 
 ```
 GMAIL_APP_PASSWORD=your_gmail_app_password
-NOTION_TOKEN=your_notion_integration_token
-NOTION_DATABASE_ID=your_notion_database_id
+GOOGLE_SERVICE_ACCOUNT_JSON=your_service_account_json
+GOOGLE_SPREADSHEET_ID=your_google_spreadsheet_id
 ```
 
 ### Local Development
@@ -59,17 +60,21 @@ Deploy to Google Cloud Functions using the provided GitHub Actions workflow in `
 - **Remitly**: `no-reply@remitly.com`
 - **Bill.com**: `account-services@hq.bill.com`
 
-### Database Schema
+### Spreadsheet Structure
 
-The Notion database will be auto-created with these properties:
-- Sender (title)
-- Service (select)
-- Amount (number)
-- Currency (select)
-- Date (date)
-- Subject (text)
-- Message ID (text)
-- Additional metadata fields
+The Google Sheets spreadsheet will have two sheets:
+**Data Sheet:**
+- Date (formatted as "2025, Aug 03")
+- Service (Wise, Billcom, PayPal, Remitly)
+- Sender (extracted from email)
+- Amount (with currency, e.g., "6600 PHP")
+- Message ID (for duplicate detection)
+
+**Metrics Sheet:**
+- Summary metrics (total payments, monthly/yearly counts)
+- Service breakdown (count, totals, averages per service)
+- Monthly trends (last 6 months analysis)
+- All metrics use Excel formulas for real-time updates
 
 ## API Endpoints
 
@@ -81,9 +86,10 @@ The Notion database will be auto-created with these properties:
 
 1. Connects to Gmail via IMAP
 2. Searches for emails from configured services (last 600 days)
-3. Extracts payment data using regex patterns
-4. Checks for duplicates in Notion database
-5. Creates new payment records
+3. Extracts payment data using regex patterns (including HTML email support)
+4. Checks for duplicates using Message IDs in Google Sheets
+5. Creates new payment records in Data sheet
+6. Updates metrics sheet with real-time analytics
 
 ## Monitoring
 

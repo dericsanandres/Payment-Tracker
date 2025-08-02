@@ -40,7 +40,7 @@ jobs:
           --memory 512MB \
           --timeout 540s \
           --set-env-vars GCP_PROJECT_ID=$GCP_PROJECT_ID \
-          --set-secrets "GMAIL_APP_PASSWORD=gmail-app-password:latest,NOTION_TOKEN=notion-api-token:latest,NOTION_DATABASE_ID=notion-database-id:latest"
+          --set-secrets "GMAIL_APP_PASSWORD=gmail-app-password:latest,GOOGLE_SERVICE_ACCOUNT_JSON=service_account:latest,GOOGLE_SPREADSHEET_ID=spreadsheet_id:latest"
 
     - name: Update Cloud Scheduler
       run: |
