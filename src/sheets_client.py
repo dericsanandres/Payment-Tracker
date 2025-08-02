@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 from email.utils import parsedate_to_datetime
 import gspread
 from google.oauth2.service_account import Credentials
-from logger import get_logger
+from src.logger import get_logger
 
 logger = get_logger(__name__)
 
