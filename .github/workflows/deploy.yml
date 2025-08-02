@@ -31,7 +31,7 @@ jobs:
     - name: Deploy to Cloud Functions
       run: |
         gcloud functions deploy $FUNCTION_NAME \
-          --runtime python39 \
+          --runtime python311 \
           --trigger-http \
           --allow-unauthenticated \
           --region $GCP_REGION \

@@ -100,19 +100,14 @@ def payment_extractor(request):
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "message": error_msg}, 500
 
-# For Cloud Run compatibility
-from flask import Flask, request as flask_request
-app = Flask(__name__)
-
-@app.route('/', methods=['POST', 'GET'])
-def main_handler():
-    return payment_extractor(flask_request)
-
-@app.route('/health', methods=['GET'])
-def health_check():
+@functions_framework.http
+def health_check(request):
+    """Health check endpoint."""
     logger.info("Health check requested")
     return {"status": "healthy", "service": "payment-extractor"}
 
 if __name__ == "__main__":
+    # For local testing
+    import functions_framework
     logger.info("Starting local development server")
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    functions_framework._run_flask_app(payment_extractor, debug=True)
