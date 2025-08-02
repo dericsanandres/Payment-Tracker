@@ -23,6 +23,7 @@ help:
 	@echo "Available commands:"
 	@echo "  $(YELLOW)make setup$(NC)       - Create virtual environment and install dependencies"
 	@echo "  $(YELLOW)make test$(NC)        - Run configuration test only"
+	@echo "  $(YELLOW)make metrics$(NC)     - Test metrics functionality"
 	@echo "  $(YELLOW)make run$(NC)         - Run full payment extraction"
 	@echo "  $(YELLOW)make test-verbose$(NC) - Run test with verbose logging"
 	@echo "  $(YELLOW)make run-verbose$(NC)  - Run extraction with verbose logging"
@@ -111,6 +112,12 @@ preflight: check-venv check-credentials check-env-vars
 test: preflight
 	@echo "$(GREEN)Running configuration test...$(NC)"
 	@set -a; source .env; set +a; $(PYTHON_VENV) $(TEST_SCRIPT) --test
+
+# Test metrics functionality
+.PHONY: metrics
+metrics: preflight
+	@echo "$(GREEN)Testing metrics functionality...$(NC)"
+	@set -a; source .env; set +a; $(PYTHON_VENV) $(TEST_SCRIPT) --metrics
 
 # Run full payment extraction
 .PHONY: run

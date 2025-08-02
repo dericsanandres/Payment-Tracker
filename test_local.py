@@ -66,7 +66,7 @@ def test_configuration():
         logger.error(f"Configuration test failed: {e}")
         return False, None
 
-def run_payment_extraction(test_mode=False):
+def run_payment_extraction(test_mode=False, test_metrics=False):
     """Run the payment extraction process."""
     try:
         logger.info("=== Payment Tracker Local Test ===")
@@ -83,6 +83,22 @@ def run_payment_extraction(test_mode=False):
                 "status": "success",
                 "message": "Local test configuration verified",
                 "test_mode": True
+            }
+        
+        if test_metrics:
+            logger.info("Testing metrics functionality...")
+            sheets_client = SheetsClient(
+                credentials_json=config['google_credentials'],
+                spreadsheet_id=config['spreadsheet_id']
+            )
+            sheets_client.ensure_spreadsheet_setup()
+            metrics_result = sheets_client.update_metrics()
+            
+            return {
+                "status": "success",
+                "message": "Metrics test completed",
+                "metrics_result": metrics_result,
+                "test_metrics": True
             }
         
         # Extract payments
@@ -119,12 +135,17 @@ def run_payment_extraction(test_mode=False):
         logger.info(f"Creating {len(payments)} payment records...")
         result = sheets_client.create_payment_records(payments)
         
+        # Update metrics after processing payments
+        logger.info("Updating metrics...")
+        metrics_result = sheets_client.update_metrics()
+        
         logger.info("Payment processing completed successfully")
         
         return {
             "status": "success",
             "payments_processed": len(payments),
             "sheets_result": result,
+            "metrics_result": metrics_result,
             "summary": {
                 "services": list(set(p.get('service') for p in payments)),
                 "total_amount": sum(float(p.get('amount', 0)) for p in payments),
@@ -144,6 +165,8 @@ def main():
     parser = argparse.ArgumentParser(description='Local Payment Tracker Test')
     parser.add_argument('--test', action='store_true', 
                        help='Test configuration only (no email processing)')
+    parser.add_argument('--metrics', action='store_true',
+                       help='Test metrics functionality only (no email processing)')
     parser.add_argument('--verbose', '-v', action='store_true',
                        help='Enable verbose logging')
     
@@ -154,7 +177,7 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
     
     # Run the extraction
-    result = run_payment_extraction(test_mode=args.test)
+    result = run_payment_extraction(test_mode=args.test, test_metrics=args.metrics)
     
     # Print results
     print(f"\n=== Results ===")
@@ -162,19 +185,28 @@ def main():
     if 'message' in result:
         print(f"Message: {result['message']}")
     
-    if result['status'] == 'success' and not args.test:
-        if 'payments_processed' in result:
-            print(f"Payments processed: {result['payments_processed']}")
-        if 'sheets_result' in result:
-            sheets_result = result['sheets_result']
-            print(f"Created: {sheets_result.get('created', 0)}")
-            print(f"Duplicates: {sheets_result.get('duplicates', 0)}")
-            print(f"Errors: {sheets_result.get('errors', 0)}")
-        if 'summary' in result:
-            summary = result['summary']
-            print(f"Services: {', '.join(summary.get('services', []))}")
-            print(f"Total amount: {summary.get('total_amount', 0)}")
-            print(f"Currencies: {', '.join(summary.get('currencies', []))}")
+    if result['status'] == 'success':
+        if args.metrics or 'metrics_result' in result:
+            metrics = result.get('metrics_result', {})
+            print(f"Metrics sheet created: {metrics.get('metrics_sheet_created', False)}")
+            print(f"Total payments: {metrics.get('total_payments', 0)}")
+            print(f"Total amount: {metrics.get('total_amount', 0)}")
+            print(f"Average amount: {metrics.get('average_amount', 0):.2f}")
+            print(f"Service breakdown: {metrics.get('service_breakdown', {})}")
+        
+        if not args.test and not args.metrics:
+            if 'payments_processed' in result:
+                print(f"Payments processed: {result['payments_processed']}")
+            if 'sheets_result' in result:
+                sheets_result = result['sheets_result']
+                print(f"Created: {sheets_result.get('created', 0)}")
+                print(f"Duplicates: {sheets_result.get('duplicates', 0)}")
+                print(f"Errors: {sheets_result.get('errors', 0)}")
+            if 'summary' in result:
+                summary = result['summary']
+                print(f"Services: {', '.join(summary.get('services', []))}")
+                print(f"Total amount: {summary.get('total_amount', 0)}")
+                print(f"Currencies: {', '.join(summary.get('currencies', []))}")
     
     return 0 if result['status'] == 'success' else 1
 
