@@ -5,6 +5,7 @@ import imaplib
 import email
 import re
 import json
+import html
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from email.header import decode_header
@@ -30,6 +31,32 @@ class PaymentExtractor:
         }
         
         logger.info(f"PaymentExtractor initialized for {gmail_username}, looking back {days_back} days")
+    
+    def _clean_html_text(self, text: str) -> str:
+        """Clean HTML content and extract readable text."""
+        if not text:
+            return ""
+        
+        # Log essential HTML tags before cleaning (for currency detection)
+        currency_tags = re.findall(r'<[^>]*(?:PHP|USD|EUR|GBP|CAD|₱|\$|€|£)[^>]*>', text, re.IGNORECASE)
+        if currency_tags:
+            logger.info(f"Currency-related HTML tags found: {currency_tags[:3]}...")  # Log first 3
+        
+        # Decode HTML entities like =3D to =
+        text = html.unescape(text)
+        
+        # Replace common HTML encoding patterns
+        text = re.sub(r'=3D', '=', text)
+        text = re.sub(r'=\n', '', text)  # Remove line breaks in encoded content
+        
+        # Remove HTML tags but keep the content
+        text = re.sub(r'<[^>]+>', ' ', text)
+        
+        # Clean up whitespace
+        text = re.sub(r'\s+', ' ', text)
+        text = text.strip()
+        
+        return text
     
     def extract_all_payments(self) -> List[Dict]:
         """Extract payments from all configured services with detailed logging."""
@@ -205,56 +232,89 @@ class PaymentExtractor:
     
     def _extract_amount(self, text: str) -> Tuple[Optional[str], Optional[str]]:
         """Extract amount and currency from text with detailed logging."""
+        # Clean HTML content first
+        clean_text = self._clean_html_text(text)
+        
         patterns = [
+            # HTML format: "has sent you 6,600 PHP"
+            r'has sent you\s+([0-9,]+\.?[0-9]*)\s+(PHP|USD|EUR|GBP|CAD)',
+            r'has sent you\s+([0-9,]+\.?[0-9]*)\s*([A-Z]{3})',
+            # Existing patterns
             r'PHP\s*([0-9,]+\.?[0-9]*)',  # PHP currency format
             r'[\$₱€£¥]([0-9,]+\.?[0-9]*)',  # Symbol first
             r'([0-9,]+\.?[0-9]*)\s*(USD|PHP|EUR|GBP|CAD)',  # Amount then currency code
             r'(USD|PHP|EUR|GBP|CAD)\s*([0-9,]+\.?[0-9]*)',  # Currency code then amount
         ]
         
-        logger.info(f"Analyzing text for amount extraction: {text[:200]}...")
+        logger.info(f"Analyzing text for amount extraction: {clean_text[:200]}...")
         
         for i, pattern in enumerate(patterns):
             logger.info(f"Trying pattern {i+1}: {pattern}")
-            match = re.search(pattern, text, re.IGNORECASE)
+            match = re.search(pattern, clean_text, re.IGNORECASE)
             if match:
                 groups = match.groups()
                 logger.info(f"Pattern {i+1} matched! Groups: {groups}")
                 
-                if i == 0:  # PHP pattern
+                # Handle different pattern types with PHP as default
+                if len(groups) == 1:
+                    # Single group patterns - determine currency from context
                     amount = groups[0].replace(',', '')
-                    currency = 'PHP'
-                    logger.info(f"Amount extracted: {amount} {currency}")
+                    if 'PHP' in pattern.upper() or i == 2:  # PHP pattern index
+                        currency = 'PHP'
+                    elif '$' in clean_text or 'USD' in clean_text.upper():
+                        currency = 'USD'
+                    elif '€' in clean_text or 'EUR' in clean_text.upper():
+                        currency = 'EUR'
+                    elif '£' in clean_text or 'GBP' in clean_text.upper():
+                        currency = 'GBP'
+                    else:
+                        currency = 'PHP'  # Default to PHP
+                    logger.info(f"Amount extracted: {amount} {currency} (pattern {i+1}, defaulted to PHP if unclear)")
                     return amount, currency
-                
-                for group in groups:
-                    if re.match(r'^[0-9,]+\.?[0-9]*$', group):
-                        amount = group.replace(',', '')
-                        currency = 'USD'  # Default currency
-                        # Look for currency in other groups
-                        for g in groups:
-                            if g != group and len(g) <= 3 and g.isalpha():
-                                currency = g.upper()
-                                break
-                        logger.info(f"Amount extracted: {amount} {currency}")
-                        return amount, currency
+                elif len(groups) == 2:
+                    # Two group patterns - amount and currency
+                    amount = groups[0].replace(',', '')
+                    currency = groups[1].upper() if groups[1] else 'PHP'
+                    logger.info(f"Amount extracted: {amount} {currency} (2-group pattern)")
+                    return amount, currency
+                else:
+                    # Multiple groups - find amount and currency
+                    for group in groups:
+                        if re.match(r'^[0-9,]+\.?[0-9]*$', group):
+                            amount = group.replace(',', '')
+                            currency = 'PHP'  # Default currency
+                            # Look for currency in other groups
+                            for g in groups:
+                                if g != group and len(g) <= 3 and g.isalpha():
+                                    currency = g.upper()
+                                    break
+                            logger.info(f"Amount extracted: {amount} {currency} (multi-group, defaulted to PHP)")
+                            return amount, currency
         
         logger.warning("No amount pattern matched")
         return None, None
     
     def _extract_sender(self, text: str) -> str:
         """Extract sender name from text with logging."""
+        # Clean HTML content first
+        clean_text = self._clean_html_text(text)
+        
         patterns = [
-            r'from\s+([A-Za-z0-9\s\.\,\-\_&]+?)(?:\s+(?:sent|paid|has|is|wants|received))',
-            r'([A-Za-z0-9\s\.\,\-\_&]+?)\s+(?:sent you|paid you|has sent|wants to pay)',
-            r'You got paid by\s+([A-Za-z0-9\s\.\,\-\_&]+)',
+            # HTML format: "Hello Name, Company Name has sent you amount" - capture only company name
+            r'Hello [^,]+,\s*([A-Za-z0-9\s\.\,\-\_&\(\)\'\"Ltd Pty Inc Corp LLC]+?)\s+has sent you\s+[0-9,]+',
+            # HTML format: "Company Name has sent you amount" - direct format
+            r'^([A-Za-z0-9\s\.\,\-\_&\(\)\'\"Ltd Pty Inc Corp LLC]+?)\s+has sent you\s+[0-9,]+',
+            # Existing patterns
+            r'from\s+([A-Za-z0-9\s\.\,\-\_&\(\)\'\"Ltd Pty Inc Corp LLC]+?)(?:\s+(?:sent|paid|has|is|wants|received))',
+            r'([A-Za-z0-9\s\.\,\-\_&\(\)\'\"Ltd Pty Inc Corp LLC]+?)\s+(?:sent you|paid you|has sent|wants to pay)',
+            r'You got paid by\s+([A-Za-z0-9\s\.\,\-\_&\(\)\'\"Ltd Pty Inc Corp LLC]+)',
         ]
         
-        logger.info(f"Analyzing text for sender extraction: {text[:200]}...")
+        logger.info(f"Analyzing text for sender extraction: {clean_text[:200]}...")
         
         for i, pattern in enumerate(patterns):
             logger.info(f"Trying sender pattern {i+1}: {pattern}")
-            match = re.search(pattern, text, re.IGNORECASE)
+            match = re.search(pattern, clean_text, re.IGNORECASE)
             if match:
                 sender = match.group(1).strip()
                 sender = re.sub(r'\s+', ' ', sender)  # Normalize whitespace

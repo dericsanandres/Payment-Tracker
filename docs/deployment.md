@@ -22,11 +22,11 @@ Create secrets for sensitive data:
 # Create Gmail app password secret
 echo -n "your-gmail-app-password" | gcloud secrets create gmail-app-password --data-file=-
 
-# Create Notion token secret  
-echo -n "secret_your-notion-token" | gcloud secrets create notion-token --data-file=-
+# Create Google Service Account JSON secret
+echo -n '{"type":"service_account","project_id":"your-project",...}' | gcloud secrets create google-service-account-json --data-file=-
 
-# Create Notion database ID secret
-echo -n "your-database-id" | gcloud secrets create notion-database-id --data-file=-
+# Create Google Spreadsheet ID secret
+echo -n "your-spreadsheet-id" | gcloud secrets create google-spreadsheet-id --data-file=-
 ```
 
 ## Deploy Function
@@ -40,7 +40,7 @@ gcloud functions deploy payment-tracker \
   --entry-point payment_extractor \
   --allow-unauthenticated \
   --set-env-vars GMAIL_USERNAME=dercsanandres@gmail.com \
-  --set-secrets GMAIL_APP_PASSWORD=gmail-app-password:latest,NOTION_TOKEN=notion-token:latest,NOTION_DATABASE_ID=notion-database-id:latest \
+  --set-secrets GMAIL_APP_PASSWORD=gmail-app-password:latest,GOOGLE_SERVICE_ACCOUNT_JSON=google-service-account-json:latest,GOOGLE_SPREADSHEET_ID=google-spreadsheet-id:latest \
   --memory 256MB \
   --timeout 540s
 ```

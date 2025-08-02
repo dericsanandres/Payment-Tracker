@@ -6,8 +6,7 @@ import os
 import json
 from src.logger import get_logger
 from src.paytment_extractor import PaymentExtractor
-from src.logger import get_logger
-from src.notion_client import NotionClient
+from src.sheets_client import SheetsClient
 
 logger = get_logger(__name__)
 
@@ -15,8 +14,8 @@ logger = get_logger(__name__)
 CONFIG = {
     'gmail_username': 'dercsanandres@gmail.com',
     'gmail_password': os.getenv('GMAIL_APP_PASSWORD'),
-    'notion_token': os.getenv('NOTION_TOKEN'),
-    'notion_db_id': os.getenv('NOTION_DATABASE_ID'),
+    'google_credentials': os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON'),
+    'spreadsheet_id': os.getenv('GOOGLE_SPREADSHEET_ID'),
     'days_to_fetch': 600
 }
 
@@ -68,27 +67,27 @@ def payment_extractor(request):
                 "payments_processed": 0
             }
         
-        # Initialize Notion client and setup database
-        logger.info("Initializing Notion client")
-        notion_client = NotionClient(
-            token=CONFIG['notion_token'],
-            database_id=CONFIG['notion_db_id']
+        # Initialize Google Sheets client and setup spreadsheet
+        logger.info("Initializing Google Sheets client")
+        sheets_client = SheetsClient(
+            credentials_json=CONFIG['google_credentials'],
+            spreadsheet_id=CONFIG['spreadsheet_id']
         )
         
-        # Ensure database exists and has correct schema
-        logger.info("Verifying Notion database setup")
-        notion_client.ensure_database_setup()
+        # Ensure spreadsheet exists and has correct schema
+        logger.info("Verifying Google Sheets setup")
+        sheets_client.ensure_spreadsheet_setup()
         
         # Create payment records
-        logger.info(f"Creating {len(payments)} payment records in Notion")
-        result = notion_client.create_payment_records(payments)
+        logger.info(f"Creating {len(payments)} payment records in Google Sheets")
+        result = sheets_client.create_payment_records(payments)
         
         logger.info("Payment processing completed successfully")
         
         return {
             "status": "success",
             "payments_processed": len(payments),
-            "notion_result": result,
+            "sheets_result": result,
             "summary": {
                 "services": list(set(p.get('service') for p in payments)),
                 "total_amount": sum(float(p.get('amount', 0)) for p in payments),
