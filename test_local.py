@@ -40,7 +40,7 @@ def load_local_config():
     if not config['spreadsheet_id']:
         raise ValueError("GOOGLE_SPREADSHEET_ID environment variable required")
     
-    config['days_to_fetch'] = 600
+    config['days_to_fetch'] = 30
     
     return config
 
