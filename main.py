@@ -16,7 +16,7 @@ CONFIG = {
     'gmail_password': os.getenv('GMAIL_APP_PASSWORD'),
     'google_credentials': os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON'),
     'spreadsheet_id': os.getenv('GOOGLE_SPREADSHEET_ID'),
-    'days_to_fetch': 600
+    'days_to_fetch': 30
 }
 
 @functions_framework.http

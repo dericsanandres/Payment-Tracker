@@ -85,7 +85,7 @@ The Google Sheets spreadsheet will have two sheets:
 ## Processing Logic
 
 1. Connects to Gmail via IMAP
-2. Searches for emails from configured services (last 600 days)
+2. Searches for emails from configured services (last 30 days)
 3. Extracts payment data using regex patterns (including HTML email support)
 4. Checks for duplicates using Message IDs in Google Sheets
 5. Creates new payment records in Data sheet
