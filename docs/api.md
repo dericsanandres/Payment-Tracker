@@ -20,7 +20,7 @@ Main payment extraction endpoint.
 {
   "status": "success",
   "payments_processed": 5,
-  "notion_result": {
+  "database_result": {
     "created": 3,
     "skipped_duplicates": 2,
     "failed": 0,
@@ -49,7 +49,7 @@ Main payment extraction endpoint.
 ```json
 {
   "status": "error",
-  "message": "Missing configuration: ['NOTION_TOKEN']"
+  "message": "Missing configuration: ['DATABASE_TOKEN']"
 }
 ```
 
@@ -86,7 +86,7 @@ Health check endpoint.
 }
 ```
 
-### Notion Result Object
+### Database Result Object
 
 ```json
 {
@@ -107,7 +107,7 @@ Health check endpoint.
 ## Rate Limits
 
 - Gmail IMAP: 250 quota units per user per second
-- Notion API: 3 requests per second
+- Database API: 3 requests per second
 - Function timeout: 540 seconds (9 minutes)
 
 ## Supported Payment Services
